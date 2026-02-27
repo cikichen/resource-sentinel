@@ -1,0 +1,36 @@
+monitor:
+  interval: 10m
+  cpu_window: 1s
+  disk_path: "/"
+  consecutive: 3
+  thresholds:
+    cpu: 85
+    memory: 80
+    disk: 90
+
+notify:
+  telegram:
+    enabled: false
+    token: ""
+    chat_id: ""
+  wechat:
+    enabled: false
+    webhook: ""
+  iyuu:
+    enabled: false
+    token: ""
+  webhook:
+    enabled: false
+    url: ""
+  pushplus:
+    enabled: false
+    token: ""
+    template: "txt"
+    topic: ""
+
+web:
+  enabled: true
+  listen: ":8080"
+  auth_token: "CHANGE_ME_STRONG_TOKEN"
+  allowed_cidrs: []
+  rate_limit_per_minute: 120

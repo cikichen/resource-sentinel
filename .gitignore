@@ -1,0 +1,21 @@
+.ace-tool/
+.codex/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Build artifacts
+/monitor
+bin/
+dist/
+build/
+
+# Logs / temp
+*.log
+*.tmp
+*.swp
+
+# Generated design artifacts
+design-system/
