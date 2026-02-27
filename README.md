@@ -35,10 +35,10 @@ go run ./cmd/monitor -config configs/config.yaml
 
 ## Docker 部署
 
-### 1. 构建镜像
+### 1. 直接拉取（默认标签 `latest`）
 
 ```bash
-docker build -t resource-sentinel:latest .
+docker pull cikichen/resource-sentinel:latest
 ```
 
 ### 2. 启动容器
@@ -56,10 +56,16 @@ docker run -d \
   -e APP_WEB_LISTEN=:8080 \
   -e APP_WEB_AUTH_TOKEN=替换成强口令 \
   -v $(pwd)/configs/config.yaml:/app/configs/config.yaml \
-  resource-sentinel:latest
+  cikichen/resource-sentinel:latest
 ```
 
-### 3. 使用 docker-compose
+### 3. 本地构建（可选）
+
+```bash
+docker build -t cikichen/resource-sentinel:latest .
+```
+
+### 4. 使用 docker-compose
 
 ```bash
 docker compose up -d --build
