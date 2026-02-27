@@ -66,6 +66,11 @@ type authLoginPayload struct {
 	Remember bool   `json:"remember"`
 }
 
+type authStatusPayload struct {
+	SetupRequired bool `json:"setup_required"`
+	Authenticated bool `json:"authenticated"`
+}
+
 type runtimeSamplePayload struct {
 	CPU    float64 `json:"cpu"`
 	Memory float64 `json:"memory"`
@@ -262,6 +267,7 @@ func NewHandlerWithOptions(configPath, authToken string, allowedCIDRs []string, 
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", h.handleIndex)
+	mux.HandleFunc("/api/auth/status", h.handleAuthStatus)
 	mux.HandleFunc("/api/auth/login", h.handleAuthLogin)
 	mux.HandleFunc("/api/auth/logout", h.handleAuthLogout)
 	mux.HandleFunc("/api/setup/status", h.handleSetupStatus)
@@ -578,6 +584,31 @@ func (h *handler) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, http.StatusOK, map[string]string{"message": "登录成功"})
 }
 
+func (h *handler) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
+	h.setSecurityHeaders(w)
+	if !h.preflightChecks(w, r) {
+		return
+	}
+	if r.Method != http.MethodGet {
+		h.writeMethodNotAllowed(w)
+		return
+	}
+
+	setupRequired := h.requiresInitialSetup()
+	authenticated := false
+	if !setupRequired {
+		expected := strings.TrimSpace(h.getAuthToken())
+		if expected == "" || h.hasValidSession(r) {
+			authenticated = true
+		}
+	}
+
+	h.writeJSON(w, http.StatusOK, authStatusPayload{
+		SetupRequired: setupRequired,
+		Authenticated: authenticated,
+	})
+}
+
 func (h *handler) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 	h.setSecurityHeaders(w)
 	if !h.preflightChecks(w, r) {
@@ -838,7 +869,7 @@ func (h *handler) setSessionCookie(w http.ResponseWriter, remember bool) {
 		expiry = time.Now().Add(30 * 24 * time.Hour)
 		maxAge = int((30 * 24 * time.Hour).Seconds())
 	}
-	value := h.newSessionValue(expiry)
+	value := h.newSessionValue(expiry, h.sessionBindingValue())
 	cookie := &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    value,
@@ -870,29 +901,29 @@ func (h *handler) hasValidSession(r *http.Request) bool {
 	if err != nil {
 		return false
 	}
-	return h.verifySessionValue(cookie.Value)
+	return h.verifySessionValue(cookie.Value, h.sessionBindingValue())
 }
 
-func (h *handler) newSessionValue(expiry time.Time) string {
+func (h *handler) newSessionValue(expiry time.Time, binding string) string {
 	nonce := make([]byte, 18)
 	if _, err := rand.Read(nonce); err != nil {
 		fallback := sha256.Sum256([]byte(fmt.Sprintf("nonce-%d", time.Now().UnixNano())))
 		nonce = fallback[:18]
 	}
-	payload := fmt.Sprintf("%d.%x", expiry.Unix(), nonce)
+	payload := fmt.Sprintf("%d.%x.%s", expiry.Unix(), nonce, binding)
 	mac := hmac.New(sha256.New, h.sessionKey)
 	_, _ = mac.Write([]byte(payload))
 	signature := fmt.Sprintf("%x", mac.Sum(nil))
 	return payload + "." + signature
 }
 
-func (h *handler) verifySessionValue(value string) bool {
+func (h *handler) verifySessionValue(value, expectedBinding string) bool {
 	parts := strings.Split(value, ".")
-	if len(parts) != 3 {
+	if len(parts) != 4 {
 		return false
 	}
-	payload := parts[0] + "." + parts[1]
-	signature := parts[2]
+	payload := parts[0] + "." + parts[1] + "." + parts[2]
+	signature := parts[3]
 	mac := hmac.New(sha256.New, h.sessionKey)
 	_, _ = mac.Write([]byte(payload))
 	expectedSig := fmt.Sprintf("%x", mac.Sum(nil))
@@ -907,7 +938,16 @@ func (h *handler) verifySessionValue(value string) bool {
 	if time.Now().After(time.Unix(expiryUnix, 0)) {
 		return false
 	}
+	if subtle.ConstantTimeCompare([]byte(parts[2]), []byte(expectedBinding)) != 1 {
+		return false
+	}
 	return true
+}
+
+func (h *handler) sessionBindingValue() string {
+	token := strings.TrimSpace(h.getAuthToken())
+	sum := sha256.Sum256([]byte(token))
+	return fmt.Sprintf("%x", sum[:])
 }
 
 func parseInt64(value string) (int64, error) {
@@ -1088,9 +1128,12 @@ const indexHTML = `<!doctype html>
       --radius-lg: 20px;
       --radius-md: 14px;
       --radius-sm: 10px;
+      --anchor-offset: 120px;
     }
 
     * { box-sizing: border-box; }
+
+    html { scroll-padding-top: var(--anchor-offset); }
 
     body {
       margin: 0;
@@ -1106,6 +1149,36 @@ const indexHTML = `<!doctype html>
 
     .hidden {
       display: none !important;
+    }
+
+    .boot-screen {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .boot-card {
+      width: min(560px, 100%);
+      padding: 20px 22px;
+      border-radius: 14px;
+      border: 1px solid var(--color-line);
+      background: var(--color-panel);
+      box-shadow: var(--shadow-md);
+      text-align: center;
+    }
+
+    .boot-card h1 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      color: var(--color-primary);
+      font-family: "Fira Code", "JetBrains Mono", monospace;
+    }
+
+    .boot-card p {
+      margin: 0;
+      color: var(--color-muted);
+      font-size: 13px;
     }
 
     .skip-link {
@@ -1284,6 +1357,9 @@ const indexHTML = `<!doctype html>
     }
 
     .topbar {
+      position: sticky;
+      top: 8px;
+      z-index: 60;
       background: rgba(255, 255, 255, 0.9);
       border: 1px solid var(--color-line);
       border-radius: var(--radius-lg);
@@ -1524,6 +1600,14 @@ const indexHTML = `<!doctype html>
       gap: 12px;
     }
 
+    #overview,
+    #group-monitor,
+    #group-notify,
+    #group-security,
+    #advanced {
+      scroll-margin-top: var(--anchor-offset);
+    }
+
     .hero {
       border-radius: var(--radius-lg);
       border: 1px solid #aac9e9;
@@ -1641,6 +1725,37 @@ const indexHTML = `<!doctype html>
       gap: 12px;
     }
 
+    .group-section {
+      grid-column: span 12;
+      display: grid;
+      gap: 10px;
+    }
+
+    .group-head {
+      padding: 2px 2px 0;
+      display: grid;
+      gap: 4px;
+    }
+
+    .group-head h3 {
+      margin: 0;
+      font-size: 15px;
+      color: var(--color-primary);
+      font-family: "Fira Code", "JetBrains Mono", monospace;
+    }
+
+    .group-head p {
+      margin: 0;
+      font-size: 12px;
+      color: var(--color-muted);
+    }
+
+    .group-grid {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 12px;
+    }
+
     .overview-card {
       padding: 15px;
       border-left: 4px solid var(--color-cta);
@@ -1706,6 +1821,7 @@ const indexHTML = `<!doctype html>
 
     .span-12 { grid-column: span 12; }
     .span-6 { grid-column: span 6; }
+    .span-4 { grid-column: span 4; }
 
     .card h3 {
       margin: 0;
@@ -1827,20 +1943,6 @@ const indexHTML = `<!doctype html>
       background: #fbfdff;
     }
 
-    .sticky-actions {
-      position: sticky;
-      bottom: 10px;
-      z-index: 20;
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
-      padding: 10px;
-      border-radius: 12px;
-      border: 1px solid #cbd5e1;
-      background: rgba(248, 250, 252, 0.9);
-      backdrop-filter: blur(8px);
-    }
-
     .error {
       border-color: var(--color-danger) !important;
       box-shadow: 0 0 0 3px rgba(185, 28, 28, 0.14) !important;
@@ -1871,6 +1973,7 @@ const indexHTML = `<!doctype html>
         font-size: 24px;
       }
       .span-6,
+      .span-4,
       .span-12 {
         grid-column: span 12;
       }
@@ -1882,12 +1985,6 @@ const indexHTML = `<!doctype html>
       }
       .field.full {
         grid-column: span 1;
-      }
-      .sticky-actions {
-        justify-content: stretch;
-      }
-      .sticky-actions .btn {
-        flex: 1;
       }
     }
 
@@ -1916,7 +2013,14 @@ const indexHTML = `<!doctype html>
   </style>
 </head>
 <body>
-  <section class="auth-gate" id="authGate" aria-label="登录页">
+  <section class="boot-screen" id="bootScreen" aria-live="polite" aria-label="启动中">
+    <div class="boot-card">
+      <h1>正在进入资源哨兵</h1>
+      <p>正在检查登录状态与配置，请稍候…</p>
+    </div>
+  </section>
+
+  <section class="auth-gate hidden" id="authGate" aria-label="登录页">
     <div class="auth-layout">
       <aside class="auth-showcase" aria-label="欢迎信息">
         <h2>资源哨兵</h2>
@@ -1969,7 +2073,7 @@ const indexHTML = `<!doctype html>
           <button class="btn btn-secondary" id="reloadBtn" type="button">重新加载</button>
           <button class="btn btn-primary" id="saveBtn" type="button">保存配置</button>
           <button class="btn btn-secondary" id="logoutBtn" type="button">退出登录</button>
-          <span class="status-chip" id="status" data-tone="idle" aria-live="polite">就绪</span>
+          <span class="status-chip hidden" id="status" data-tone="idle" aria-live="polite"></span>
         </div>
       </div>
 
@@ -1979,9 +2083,10 @@ const indexHTML = `<!doctype html>
       <aside class="side-panel" aria-label="页面侧边栏">
         <p class="intro">日常使用推荐快速配置；高级 YAML 适合批量导入和精细调整。</p>
         <nav class="toc" aria-label="页面导航">
-          <a href="#monitor">监控策略</a>
-          <a href="#notify-main">通知通道</a>
-          <a href="#web-security">Web 安全</a>
+          <a href="#overview">状态总览</a>
+          <a href="#group-monitor">监控配置</a>
+          <a href="#group-notify">通知配置</a>
+          <a href="#group-security">访问与安全</a>
           <a id="navAdvancedLink" href="#advanced">高级配置（YAML）</a>
         </nav>
         <ul class="hint-list">
@@ -2012,14 +2117,14 @@ const indexHTML = `<!doctype html>
 
         <div class="tab-body active" id="tabVisual">
           <section class="dashboard-grid">
-            <article class="card span-12 overview-card" aria-live="polite">
+            <article class="card span-12 overview-card" id="overview" aria-live="polite">
               <div class="card-header">
                 <h3>当前状态</h3>
-                <p class="card-sub">展示当前资源占用与配置风险摘要</p>
+                <p class="card-sub">展示告警阈值与配置风险摘要</p>
               </div>
               <div class="overview-grid">
                 <div class="overview-item">
-                  <span class="overview-label">当前资源占用</span>
+                  <span class="overview-label">告警阈值</span>
                   <strong id="ov_thresholds">-</strong>
                 </div>
                 <div class="overview-item">
@@ -2038,108 +2143,128 @@ const indexHTML = `<!doctype html>
               <p class="overview-risk" id="ov_risk" data-tone="warn">-</p>
             </article>
 
-            <article class="card span-6" id="monitor">
-              <div class="card-header">
-                <h3>监控策略</h3>
-                <p class="card-sub">建议低频采样，长期运行更省资源</p>
+            <section class="group-section" id="group-monitor" aria-labelledby="group-monitor-title">
+              <div class="group-head">
+                <h3 id="group-monitor-title">监控配置</h3>
+                <p>配置采样周期、采样窗口、触发次数和告警阈值。</p>
               </div>
-              <div class="fields">
-                <div class="field">
-                  <label for="monitor_interval">采样间隔</label>
-                  <input id="monitor_interval" placeholder="10m">
-                  <small>示例：10m / 30m / 1h</small>
+              <article class="card span-12" id="monitor">
+                <div class="card-header">
+                  <h3>监控策略</h3>
+                  <p class="card-sub">建议低频采样，长期运行更省资源</p>
                 </div>
-                <div class="field">
-                  <label for="monitor_cpu_window">CPU 采样窗口</label>
-                  <input id="monitor_cpu_window" placeholder="1s">
+                <div class="fields">
+                  <div class="field">
+                    <label for="monitor_interval">采样间隔</label>
+                    <input id="monitor_interval" placeholder="10m">
+                    <small>示例：10m / 30m / 1h</small>
+                  </div>
+                  <div class="field">
+                    <label for="monitor_cpu_window">CPU 采样窗口</label>
+                    <input id="monitor_cpu_window" placeholder="1s">
+                  </div>
+                  <div class="field">
+                    <label for="monitor_disk_path">磁盘路径</label>
+                    <input id="monitor_disk_path" placeholder="/">
+                  </div>
+                  <div class="field">
+                    <label for="monitor_consecutive">连续触发次数</label>
+                    <input id="monitor_consecutive" type="number" min="1">
+                  </div>
+                  <div class="field">
+                    <label for="threshold_cpu">CPU 阈值 (%)</label>
+                    <input id="threshold_cpu" type="number" min="0" max="100" step="0.1">
+                  </div>
+                  <div class="field">
+                    <label for="threshold_memory">内存阈值 (%)</label>
+                    <input id="threshold_memory" type="number" min="0" max="100" step="0.1">
+                  </div>
+                  <div class="field full">
+                    <label for="threshold_disk">磁盘阈值 (%)</label>
+                    <input id="threshold_disk" type="number" min="0" max="100" step="0.1">
+                  </div>
                 </div>
-                <div class="field">
-                  <label for="monitor_disk_path">磁盘路径</label>
-                  <input id="monitor_disk_path" placeholder="/">
-                </div>
-                <div class="field">
-                  <label for="monitor_consecutive">连续触发次数</label>
-                  <input id="monitor_consecutive" type="number" min="1">
-                </div>
-                <div class="field">
-                  <label for="threshold_cpu">CPU 阈值 (%)</label>
-                  <input id="threshold_cpu" type="number" min="0" max="100" step="0.1">
-                </div>
-                <div class="field">
-                  <label for="threshold_memory">内存阈值 (%)</label>
-                  <input id="threshold_memory" type="number" min="0" max="100" step="0.1">
-                </div>
-                <div class="field full">
-                  <label for="threshold_disk">磁盘阈值 (%)</label>
-                  <input id="threshold_disk" type="number" min="0" max="100" step="0.1">
-                </div>
-              </div>
-            </article>
+              </article>
+            </section>
 
-            <article class="card span-6" id="notify-main">
-              <div class="card-header">
-                <h3>Telegram</h3>
-                <p class="card-sub">主通道：适合即时告警触达</p>
+            <section class="group-section" id="group-notify" aria-labelledby="group-notify-title">
+              <div class="group-head">
+                <h3 id="group-notify-title">通知配置</h3>
+                <p>按通道分组配置告警发送能力，可按你的使用场景单独启用。</p>
               </div>
-              <div class="toggle"><label for="tg_enabled">启用 Telegram</label><input id="tg_enabled" type="checkbox"></div>
-              <div class="fields">
-                <div class="field full"><label for="tg_token">Bot Token</label><input id="tg_token"></div>
-                <div class="field full"><label for="tg_chat_id">Chat ID</label><input id="tg_chat_id"></div>
-              </div>
-            </article>
+              <div class="group-grid">
+                <article class="card span-4" id="notify-main">
+                  <div class="card-header">
+                    <h3>Telegram</h3>
+                    <p class="card-sub">主通道：适合即时告警触达</p>
+                  </div>
+                  <div class="toggle"><label for="tg_enabled">启用 Telegram</label><input id="tg_enabled" type="checkbox"></div>
+                  <div class="fields">
+                    <div class="field full"><label for="tg_token">Bot Token</label><input id="tg_token"></div>
+                    <div class="field full"><label for="tg_chat_id">Chat ID</label><input id="tg_chat_id"></div>
+                  </div>
+                </article>
 
-            <article class="card span-6">
-              <div class="card-header">
-                <h3>企业微信 + IYUU</h3>
-                <p class="card-sub">团队协同与移动端提醒</p>
-              </div>
-              <div class="toggle"><label for="wechat_enabled">启用企业微信</label><input id="wechat_enabled" type="checkbox"></div>
-              <div class="field"><label for="wechat_webhook">企业微信 Webhook</label><input id="wechat_webhook"></div>
-              <div class="toggle"><label for="iyuu_enabled">启用 IYUU</label><input id="iyuu_enabled" type="checkbox"></div>
-              <div class="field"><label for="iyuu_token">IYUU Token</label><input id="iyuu_token"></div>
-            </article>
+                <article class="card span-4" id="notify-team">
+                  <div class="card-header">
+                    <h3>企业微信 + IYUU</h3>
+                    <p class="card-sub">团队协同与移动端提醒</p>
+                  </div>
+                  <div class="toggle"><label for="wechat_enabled">启用企业微信</label><input id="wechat_enabled" type="checkbox"></div>
+                  <div class="field"><label for="wechat_webhook">企业微信 Webhook</label><input id="wechat_webhook"></div>
+                  <div class="toggle"><label for="iyuu_enabled">启用 IYUU</label><input id="iyuu_enabled" type="checkbox"></div>
+                  <div class="field"><label for="iyuu_token">IYUU Token</label><input id="iyuu_token"></div>
+                </article>
 
-            <article class="card span-6">
-              <div class="card-header">
-                <h3>Webhook + PushPlus</h3>
-                <p class="card-sub">外部系统与群组消息联动</p>
+                <article class="card span-4" id="notify-automation">
+                  <div class="card-header">
+                    <h3>Webhook + PushPlus</h3>
+                    <p class="card-sub">外部系统与群组消息联动</p>
+                  </div>
+                  <div class="toggle"><label for="webhook_enabled">启用通用 Webhook</label><input id="webhook_enabled" type="checkbox"></div>
+                  <div class="field"><label for="webhook_url">Webhook URL</label><input id="webhook_url"></div>
+                  <hr style="border:none;border-top:1px dashed #dbe4ee;margin:12px 0;">
+                  <div class="toggle"><label for="pushplus_enabled">启用 PushPlus</label><input id="pushplus_enabled" type="checkbox"></div>
+                  <div class="fields">
+                    <div class="field full"><label for="pushplus_token">PushPlus Token</label><input id="pushplus_token"></div>
+                    <div class="field">
+                      <label for="pushplus_template">模板</label>
+                      <select id="pushplus_template">
+                        <option value="txt">txt</option>
+                        <option value="markdown">markdown</option>
+                        <option value="html">html</option>
+                        <option value="json">json</option>
+                      </select>
+                    </div>
+                    <div class="field"><label for="pushplus_topic">Topic(可选)</label><input id="pushplus_topic"></div>
+                  </div>
+                </article>
               </div>
-              <div class="toggle"><label for="webhook_enabled">启用通用 Webhook</label><input id="webhook_enabled" type="checkbox"></div>
-              <div class="field"><label for="webhook_url">Webhook URL</label><input id="webhook_url"></div>
-              <hr style="border:none;border-top:1px dashed #dbe4ee;margin:12px 0;">
-              <div class="toggle"><label for="pushplus_enabled">启用 PushPlus</label><input id="pushplus_enabled" type="checkbox"></div>
-              <div class="fields">
-                <div class="field full"><label for="pushplus_token">PushPlus Token</label><input id="pushplus_token"></div>
-                <div class="field">
-                  <label for="pushplus_template">模板</label>
-                  <select id="pushplus_template">
-                    <option value="txt">txt</option>
-                    <option value="markdown">markdown</option>
-                    <option value="html">html</option>
-                    <option value="json">json</option>
-                  </select>
+            </section>
+
+            <section class="group-section" id="group-security" aria-labelledby="group-security-title">
+              <div class="group-head">
+                <h3 id="group-security-title">访问与安全</h3>
+                <p>管理控制台访问范围、口令与限流策略。</p>
+              </div>
+              <article class="card span-12" id="web-security">
+                <div class="card-header">
+                  <h3>Web 安全</h3>
+                  <p class="card-sub">公网访问建议同时启用口令、白名单与限流</p>
                 </div>
-                <div class="field"><label for="pushplus_topic">Topic(可选)</label><input id="pushplus_topic"></div>
-              </div>
-            </article>
-
-            <article class="card span-12" id="web-security">
-              <div class="card-header">
-                <h3>Web 安全</h3>
-                <p class="card-sub">公网访问建议同时启用口令、白名单与限流</p>
-              </div>
-              <div class="fields">
-                <div class="field">
-                  <label>Web 控制台状态</label>
-                  <input value="默认启用（当前版本不提供禁用开关）" readonly>
+                <div class="fields">
+                  <div class="field">
+                    <label>Web 控制台状态</label>
+                    <input value="默认启用（当前版本不提供禁用开关）" readonly>
+                  </div>
+                  <div class="field"><label for="web_listen">监听地址</label><input id="web_listen" placeholder=":8080"></div>
+                  <div class="field"><label for="web_rate_limit">限流(每 IP 每分钟)</label><input id="web_rate_limit" type="number" min="1" placeholder="120"></div>
+                  <div class="field"><label for="web_allowed_cidrs">白名单 CIDR/IP</label><input id="web_allowed_cidrs" placeholder="10.0.0.0/8,192.168.1.10"></div>
+                  <div class="field full"><label for="web_auth_token">访问口令</label><input id="web_auth_token" placeholder="公网部署时必须配置强口令"></div>
                 </div>
-                <div class="field"><label for="web_listen">监听地址</label><input id="web_listen" placeholder=":8080"></div>
-                <div class="field"><label for="web_rate_limit">限流(每 IP 每分钟)</label><input id="web_rate_limit" type="number" min="1" placeholder="120"></div>
-                <div class="field"><label for="web_allowed_cidrs">白名单 CIDR/IP</label><input id="web_allowed_cidrs" placeholder="10.0.0.0/8,192.168.1.10"></div>
-                <div class="field full"><label for="web_auth_token">访问口令</label><input id="web_auth_token" placeholder="公网部署时必须配置强口令"></div>
-              </div>
-              <p class="helper">若监听地址不是 127.0.0.1 / localhost，建议至少配置强口令与来源白名单。访问口令保存后立即生效。</p>
-            </article>
+                <p class="helper">若监听地址不是 127.0.0.1 / localhost，建议至少配置强口令与来源白名单。访问口令保存后立即生效。</p>
+              </article>
+            </section>
           </section>
         </div>
 
@@ -2156,15 +2281,13 @@ const indexHTML = `<!doctype html>
           </section>
         </div>
 
-        <div class="sticky-actions">
-          <button class="btn btn-primary" id="stickySaveVisualBtn" type="button">保存配置</button>
-        </div>
       </main>
     </div>
   </div>
 
   <script>
     const statusEl = document.getElementById('status');
+    const bootScreenEl = document.getElementById('bootScreen');
     const rawEditor = document.getElementById('raw_editor');
     const skipLinkEl = document.getElementById('skipLink');
     const appShellEl = document.getElementById('appShell');
@@ -2182,15 +2305,14 @@ const indexHTML = `<!doctype html>
     const openAdvancedBtn = document.getElementById('openAdvancedBtn');
     const backVisualBtn = document.getElementById('backVisualBtn');
     const tocLinks = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+    const topbarEl = document.querySelector('.topbar');
     const tabVisual = document.getElementById('tabVisual');
     const tabRaw = document.getElementById('tabRaw');
-    const primaryButtons = ['reloadBtn', 'saveBtn', 'saveRawBtn', 'stickySaveVisualBtn'];
+    const primaryButtons = ['reloadBtn', 'saveBtn', 'saveRawBtn'];
     const inlineValidateTargets = ['monitor_interval', 'monitor_cpu_window', 'threshold_cpu', 'threshold_memory', 'threshold_disk', 'web_rate_limit'];
     let isDirty = false;
     let authMode = 'login';
     let hasAuthToken = false;
-    let runtimeSample = null;
-    let runtimeTimer = 0;
 
     function setBusy(busy) {
       primaryButtons.forEach(function(id) {
@@ -2200,8 +2322,16 @@ const indexHTML = `<!doctype html>
     }
 
     function setStatus(text, type) {
-      statusEl.textContent = text;
       const tone = type || 'idle';
+      const content = (text || '').trim();
+      if (tone === 'idle' && !content) {
+        statusEl.textContent = '';
+        statusEl.setAttribute('data-tone', 'idle');
+        statusEl.classList.add('hidden');
+        return;
+      }
+      statusEl.classList.remove('hidden');
+      statusEl.textContent = content;
       statusEl.setAttribute('data-tone', tone);
     }
 
@@ -2209,6 +2339,10 @@ const indexHTML = `<!doctype html>
 
     function setAuthHint(text) {
       if (loginHintEl) loginHintEl.textContent = text || '';
+    }
+
+    function hideBootScreen() {
+      if (bootScreenEl) bootScreenEl.classList.add('hidden');
     }
 
     function setAuthMode(mode) {
@@ -2230,7 +2364,7 @@ const indexHTML = `<!doctype html>
     }
 
     function showAuthGate(message) {
-      stopRuntimePolling();
+      hideBootScreen();
       if (appShellEl) appShellEl.classList.add('hidden');
       if (skipLinkEl) skipLinkEl.classList.add('hidden');
       if (authGateEl) authGateEl.classList.remove('hidden');
@@ -2238,16 +2372,29 @@ const indexHTML = `<!doctype html>
     }
 
     function showAppShell() {
+      hideBootScreen();
       if (authGateEl) authGateEl.classList.add('hidden');
       if (appShellEl) appShellEl.classList.remove('hidden');
       if (skipLinkEl) skipLinkEl.classList.remove('hidden');
-      startRuntimePolling();
+      requestAnimationFrame(syncAnchorOffset);
     }
 
     async function fetchSetupStatus() {
       const result = await apiFetch('/api/setup/status');
       if (!result.res.ok) return { ok: false, required: false, error: result.data.error || '检查初始化状态失败' };
       return { ok: true, required: !!result.data.required };
+    }
+
+    async function fetchAuthStatus() {
+      const result = await apiFetch('/api/auth/status');
+      if (!result.res.ok) {
+        return { ok: false, setupRequired: false, authenticated: false, error: result.data.error || '检查登录状态失败' };
+      }
+      return {
+        ok: true,
+        setupRequired: !!result.data.setup_required,
+        authenticated: !!result.data.authenticated
+      };
     }
 
     function safeText(id, text) {
@@ -2264,14 +2411,12 @@ const indexHTML = `<!doctype html>
     function updateOverview(payload) {
       if (!payload || !payload.monitor || !payload.notify || !payload.web) return;
 
-      if (runtimeSample) {
-        safeText(
-          'ov_thresholds',
-          'CPU ' + formatPercent(runtimeSample.cpu) + ' / 内存 ' + formatPercent(runtimeSample.memory) + ' / 磁盘 ' + formatPercent(runtimeSample.disk)
-        );
-      } else {
-        safeText('ov_thresholds', '采集中...');
-      }
+      safeText(
+        'ov_thresholds',
+        'CPU ≥ ' + formatPercent(payload.monitor.thresholds.cpu) +
+        ' / 内存 ≥ ' + formatPercent(payload.monitor.thresholds.memory) +
+        ' / 磁盘 ≥ ' + formatPercent(payload.monitor.thresholds.disk)
+      );
 
       const enabledChannels = [
         payload.notify.telegram && payload.notify.telegram.enabled,
@@ -2314,42 +2459,6 @@ const indexHTML = `<!doctype html>
       }
     }
 
-    async function loadRuntime(options) {
-      const silentUnauthorized = !!(options && options.silentUnauthorized);
-      const result = await apiFetch('/api/runtime');
-      if (result.res.status === 401) {
-        if (silentUnauthorized) {
-          await logoutAndReset();
-        } else {
-          setStatus('鉴权失败，请重新登录', 'err');
-        }
-        return 'unauthorized';
-      }
-      if (!result.res.ok) {
-        runtimeSample = null;
-        updateOverview(collectVisual());
-        return 'error';
-      }
-      runtimeSample = result.data && result.data.sample ? result.data.sample : null;
-      updateOverview(collectVisual());
-      return 'ok';
-    }
-
-    function stopRuntimePolling() {
-      if (runtimeTimer) {
-        window.clearInterval(runtimeTimer);
-        runtimeTimer = 0;
-      }
-    }
-
-    function startRuntimePolling() {
-      stopRuntimePolling();
-      loadRuntime({ silentUnauthorized: true });
-      runtimeTimer = window.setInterval(function() {
-        loadRuntime({ silentUnauthorized: true });
-      }, 15000);
-    }
-
     function markDirty() {
       isDirty = true;
       setStatus('有未保存修改', 'warn');
@@ -2386,7 +2495,6 @@ const indexHTML = `<!doctype html>
 
     async function logoutAndReset() {
       await logoutRequest();
-      runtimeSample = null;
       clearTokenInputs();
       if (loginRememberEl) loginRememberEl.checked = false;
       setAuthMode('login');
@@ -2445,14 +2553,29 @@ const indexHTML = `<!doctype html>
       return { res: res, data: data };
     }
 
+    function syncAnchorOffset() {
+      const fallback = 120;
+      const topbarHeight = topbarEl ? Math.ceil(topbarEl.getBoundingClientRect().height) : 0;
+      const offset = Math.max(fallback, topbarHeight + 24);
+      document.documentElement.style.setProperty('--anchor-offset', String(offset) + 'px');
+      return offset;
+    }
+
+    function scrollToHash(hash) {
+      const target = document.querySelector(hash);
+      if (!target) return;
+      const offset = syncAnchorOffset();
+      const top = target.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    }
+
     function switchTab(toRaw) {
       tabVisual.classList.toggle('active', !toRaw);
       tabRaw.classList.toggle('active', toRaw);
       const saveVisualBtn = document.getElementById('saveBtn');
-      const stickySaveVisualBtn = document.getElementById('stickySaveVisualBtn');
       if (saveVisualBtn) saveVisualBtn.classList.toggle('hidden', toRaw);
-      if (stickySaveVisualBtn) stickySaveVisualBtn.classList.toggle('hidden', toRaw);
       if (openAdvancedBtn) openAdvancedBtn.classList.toggle('hidden', toRaw);
+      syncAnchorOffset();
     }
 
     function fillVisual(cfg) {
@@ -2574,7 +2697,6 @@ const indexHTML = `<!doctype html>
         return 'error';
       }
       fillVisual(result.data);
-      await loadRuntime({ silentUnauthorized: true });
       clearValidationStates();
       clearDirty();
       setBusy(false);
@@ -2702,7 +2824,6 @@ const indexHTML = `<!doctype html>
           showAuthGate(setupResult.data.error || '初始化失败，请稍后重试。');
           return;
         }
-        setAuthMode('login');
         setAuthHint('初始化成功，正在进入控制台...');
       } else {
         setAuthHint('验证中...');
@@ -2718,7 +2839,7 @@ const indexHTML = `<!doctype html>
       if (state === 'ok') {
         showAppShell();
         await loadRaw();
-        setStatus(isSetupFlow ? '初始化并登录成功' : '登录成功', 'ok');
+        setStatus('', 'idle');
         setAuthHint('登录成功。');
         if (loginTokenConfirmInput) loginTokenConfirmInput.value = '';
         return;
@@ -2745,6 +2866,7 @@ const indexHTML = `<!doctype html>
 
     if (openAdvancedBtn) openAdvancedBtn.addEventListener('click', function(){ switchTab(true); });
     if (backVisualBtn) backVisualBtn.addEventListener('click', function(){ switchTab(false); });
+    window.addEventListener('resize', syncAnchorOffset);
     tocLinks.forEach(function(link) {
       link.addEventListener('click', function(e) {
         const href = (link.getAttribute('href') || '').trim();
@@ -2752,8 +2874,9 @@ const indexHTML = `<!doctype html>
         e.preventDefault();
         const toRaw = href === '#advanced';
         switchTab(toRaw);
-        const target = document.querySelector(href);
-        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        requestAnimationFrame(function() {
+          scrollToHash(href);
+        });
       });
     });
     document.getElementById('reloadBtn').addEventListener('click', async function() {
@@ -2766,7 +2889,6 @@ const indexHTML = `<!doctype html>
     });
     document.getElementById('saveBtn').addEventListener('click', saveVisual);
     document.getElementById('saveRawBtn').addEventListener('click', saveRaw);
-    document.getElementById('stickySaveVisualBtn').addEventListener('click', saveVisual);
     if (logoutBtn) logoutBtn.addEventListener('click', logoutAndReset);
     loginBtn.addEventListener('click', loginWithToken);
     if (loginTokenInput) {
@@ -2778,7 +2900,45 @@ const indexHTML = `<!doctype html>
     (async function init() {
       setupToken();
       bindDirtyWatchers();
+      syncAnchorOffset();
       switchTab(false);
+
+      const authStatus = await fetchAuthStatus();
+      if (authStatus.ok) {
+        if (authStatus.setupRequired) {
+          setAuthMode('setup');
+          showAuthGate('首次启动请先设置访问口令。');
+          return;
+        }
+
+        if (authStatus.authenticated) {
+          setAuthMode('login');
+          const state = await loadVisual({ silentUnauthorized: true });
+          if (state === 'ok') {
+            showAppShell();
+            await loadRaw();
+            setStatus('', 'idle');
+            setAuthHint('已自动登录。');
+            return;
+          }
+          if (state === 'setup-required') {
+            setAuthMode('setup');
+            showAuthGate('首次启动请先设置访问口令。');
+            return;
+          }
+          if (state === 'unauthorized') {
+            showAuthGate('请输入访问口令以登录控制台。');
+            return;
+          }
+          showAuthGate('连接状态异常，可稍后重试。');
+          return;
+        }
+
+        setAuthMode('login');
+        showAuthGate('请输入访问口令以登录控制台。');
+        return;
+      }
+
       const setupStatus = await fetchSetupStatus();
       if (setupStatus.ok && setupStatus.required) {
         setAuthMode('setup');
@@ -2790,6 +2950,7 @@ const indexHTML = `<!doctype html>
       if (state === 'ok') {
         showAppShell();
         await loadRaw();
+        setStatus('', 'idle');
         setAuthHint('已自动登录。');
         return;
       }

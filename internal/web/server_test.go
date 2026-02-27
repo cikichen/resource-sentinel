@@ -296,6 +296,34 @@ func TestSetupStatusRequiredWhenUsingBootstrapToken(t *testing.T) {
 	}
 }
 
+func TestAuthStatusSetupRequiredWhenUsingBootstrapToken(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(testConfigYAML), 0o644); err != nil {
+		t.Fatalf("write test config failed: %v", err)
+	}
+
+	h := NewHandler(configPath, bootstrapAuthToken)
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/status", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d, body=%s", rr.Code, rr.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("parse response failed: %v", err)
+	}
+	if payload["setup_required"] != true {
+		t.Fatalf("expected setup_required=true, got %v", payload["setup_required"])
+	}
+	if payload["authenticated"] != false {
+		t.Fatalf("expected authenticated=false, got %v", payload["authenticated"])
+	}
+}
+
 func TestSetupAuthAppliesTokenImmediately(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yaml")
@@ -352,6 +380,147 @@ func TestSetupAuthAppliesTokenImmediately(t *testing.T) {
 	}
 	if strings.Contains(savedText, "new-strong-token-123") {
 		t.Fatalf("plaintext auth token should not be persisted, got %s", savedText)
+	}
+}
+
+func TestAuthStatusReflectsSessionState(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(testConfigYAML), 0o644); err != nil {
+		t.Fatalf("write test config failed: %v", err)
+	}
+
+	h := NewHandler(configPath, bootstrapAuthToken)
+	setupPayload := map[string]string{"token": "new-strong-token-123"}
+	setupBody, _ := json.Marshal(setupPayload)
+	setupReq := httptest.NewRequest(http.MethodPost, "/api/setup/auth", bytes.NewReader(setupBody))
+	setupReq.Header.Set("Content-Type", "application/json")
+	setupResp := httptest.NewRecorder()
+	h.ServeHTTP(setupResp, setupReq)
+	if setupResp.Code != http.StatusOK {
+		t.Fatalf("expected setup 200, got %d, body=%s", setupResp.Code, setupResp.Body.String())
+	}
+
+	noSessionReq := httptest.NewRequest(http.MethodGet, "/api/auth/status", nil)
+	noSessionResp := httptest.NewRecorder()
+	h.ServeHTTP(noSessionResp, noSessionReq)
+	if noSessionResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 without session, got %d, body=%s", noSessionResp.Code, noSessionResp.Body.String())
+	}
+	var noSessionPayload map[string]any
+	if err := json.Unmarshal(noSessionResp.Body.Bytes(), &noSessionPayload); err != nil {
+		t.Fatalf("parse no-session response failed: %v", err)
+	}
+	if noSessionPayload["setup_required"] != false {
+		t.Fatalf("expected setup_required=false, got %v", noSessionPayload["setup_required"])
+	}
+	if noSessionPayload["authenticated"] != false {
+		t.Fatalf("expected authenticated=false without session, got %v", noSessionPayload["authenticated"])
+	}
+
+	cookies := setupResp.Result().Cookies()
+	if len(cookies) == 0 {
+		t.Fatalf("expected session cookie from setup response")
+	}
+	withSessionReq := httptest.NewRequest(http.MethodGet, "/api/auth/status", nil)
+	withSessionReq.AddCookie(cookies[0])
+	withSessionResp := httptest.NewRecorder()
+	h.ServeHTTP(withSessionResp, withSessionReq)
+	if withSessionResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 with session, got %d, body=%s", withSessionResp.Code, withSessionResp.Body.String())
+	}
+	var withSessionPayload map[string]any
+	if err := json.Unmarshal(withSessionResp.Body.Bytes(), &withSessionPayload); err != nil {
+		t.Fatalf("parse with-session response failed: %v", err)
+	}
+	if withSessionPayload["setup_required"] != false {
+		t.Fatalf("expected setup_required=false, got %v", withSessionPayload["setup_required"])
+	}
+	if withSessionPayload["authenticated"] != true {
+		t.Fatalf("expected authenticated=true with session, got %v", withSessionPayload["authenticated"])
+	}
+}
+
+func TestSessionInvalidAfterAuthTokenChange(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(testConfigYAML), 0o644); err != nil {
+		t.Fatalf("write test config failed: %v", err)
+	}
+
+	h := NewHandler(configPath, bootstrapAuthToken)
+	setupPayload := map[string]string{"token": "new-strong-token-123"}
+	setupBody, _ := json.Marshal(setupPayload)
+	setupReq := httptest.NewRequest(http.MethodPost, "/api/setup/auth", bytes.NewReader(setupBody))
+	setupReq.Header.Set("Content-Type", "application/json")
+	setupResp := httptest.NewRecorder()
+	h.ServeHTTP(setupResp, setupReq)
+	if setupResp.Code != http.StatusOK {
+		t.Fatalf("expected setup 200, got %d, body=%s", setupResp.Code, setupResp.Body.String())
+	}
+
+	cookies := setupResp.Result().Cookies()
+	if len(cookies) == 0 {
+		t.Fatalf("expected session cookie from setup response")
+	}
+
+	statusReq := httptest.NewRequest(http.MethodGet, "/api/auth/status", nil)
+	statusReq.AddCookie(cookies[0])
+	statusResp := httptest.NewRecorder()
+	h.ServeHTTP(statusResp, statusReq)
+	if statusResp.Code != http.StatusOK {
+		t.Fatalf("expected auth status 200 before token change, got %d", statusResp.Code)
+	}
+	if !strings.Contains(statusResp.Body.String(), `"authenticated":true`) {
+		t.Fatalf("expected authenticated=true before token change, got %s", statusResp.Body.String())
+	}
+
+	updatePayload := map[string]any{
+		"monitor": map[string]any{
+			"interval":    "10s",
+			"cpu_window":  "1s",
+			"disk_path":   "/",
+			"consecutive": 2,
+			"thresholds": map[string]any{
+				"cpu":    66.0,
+				"memory": 77.0,
+				"disk":   88.0,
+			},
+		},
+		"notify": map[string]any{
+			"telegram": map[string]any{"enabled": false, "token": "", "chat_id": ""},
+			"wechat":   map[string]any{"enabled": false, "webhook": ""},
+			"iyuu":     map[string]any{"enabled": false, "token": ""},
+			"webhook":  map[string]any{"enabled": false, "url": ""},
+			"pushplus": map[string]any{"enabled": false, "token": "", "template": "txt", "topic": ""},
+		},
+		"web": map[string]any{
+			"enabled":               true,
+			"listen":                ":8080",
+			"auth_token":            "another-strong-token-456",
+			"allowed_cidrs":         []string{},
+			"rate_limit_per_minute": 120,
+		},
+	}
+	updateBody, _ := json.Marshal(updatePayload)
+	updateReq := httptest.NewRequest(http.MethodPost, "/api/config", bytes.NewReader(updateBody))
+	updateReq.Header.Set("Content-Type", "application/json")
+	updateReq.AddCookie(cookies[0])
+	updateResp := httptest.NewRecorder()
+	h.ServeHTTP(updateResp, updateReq)
+	if updateResp.Code != http.StatusOK {
+		t.Fatalf("expected config update 200, got %d, body=%s", updateResp.Code, updateResp.Body.String())
+	}
+
+	statusAfterReq := httptest.NewRequest(http.MethodGet, "/api/auth/status", nil)
+	statusAfterReq.AddCookie(cookies[0])
+	statusAfterResp := httptest.NewRecorder()
+	h.ServeHTTP(statusAfterResp, statusAfterReq)
+	if statusAfterResp.Code != http.StatusOK {
+		t.Fatalf("expected auth status 200 after token change, got %d", statusAfterResp.Code)
+	}
+	if !strings.Contains(statusAfterResp.Body.String(), `"authenticated":false`) {
+		t.Fatalf("expected authenticated=false after token change, got %s", statusAfterResp.Body.String())
 	}
 }
 

@@ -55,7 +55,7 @@ docker run -d \
   -e APP_WEB_ENABLED=true \
   -e APP_WEB_LISTEN=:8080 \
   -e APP_WEB_AUTH_TOKEN=替换成强口令 \
-  -v $(pwd)/configs/config.yaml:/app/configs/config.yaml \
+  -v $(pwd)/configs:/app/configs \
   cikichen/resource-sentinel:latest
 ```
 
@@ -69,6 +69,40 @@ docker build -t cikichen/resource-sentinel:latest .
 
 ```bash
 docker compose up -d --build
+```
+
+`docker-compose.yml` 示例：
+
+```yaml
+services:
+  resource-sentinel:
+    image: cikichen/resource-sentinel:latest
+    container_name: resource-sentinel
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      CONFIG_PATH: /app/configs/config.yaml
+      APP_WEB_ENABLED: "true"
+      APP_WEB_LISTEN: ":8080"
+      APP_WEB_RATE_LIMIT_PER_MINUTE: "120"
+      APP_WEB_ALLOWED_CIDRS: ""
+      APP_TG_ENABLED: "false"
+      APP_TG_TOKEN: ""
+      APP_TG_CHAT_ID: ""
+      APP_WECHAT_ENABLED: "false"
+      APP_WECHAT_WEBHOOK: ""
+      APP_IYUU_ENABLED: "false"
+      APP_IYUU_TOKEN: ""
+      APP_WEBHOOK_ENABLED: "false"
+      APP_WEBHOOK_URL: ""
+      APP_PUSHPLUS_ENABLED: "false"
+      APP_PUSHPLUS_TOKEN: ""
+      APP_PUSHPLUS_TEMPLATE: "txt"
+      APP_PUSHPLUS_TOPIC: ""
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./configs:/app/configs
 ```
 
 ## 配置说明

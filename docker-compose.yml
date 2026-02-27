@@ -25,8 +25,7 @@ services:
       APP_WEB_LISTEN: ":8080"
       APP_WEB_ALLOWED_CIDRS: ""
       APP_WEB_RATE_LIMIT_PER_MINUTE: "120"
-      APP_WEB_AUTH_TOKEN: "CHANGE_ME_STRONG_TOKEN"
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
-      - ./configs/config.yaml:/app/configs/config.yaml
+      - ./configs:/app/configs
