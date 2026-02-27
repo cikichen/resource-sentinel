@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 )
 
 type WeChatNotifier struct {
@@ -16,10 +15,10 @@ type WeChatNotifier struct {
 	client  *http.Client
 }
 
-func NewWeChatNotifier(webhook string) *WeChatNotifier {
+func NewWeChatNotifier(webhook, proxyURL string) *WeChatNotifier {
 	return &WeChatNotifier{
 		webhook: strings.TrimSpace(webhook),
-		client:  &http.Client{Timeout: 10 * time.Second},
+		client:  newHTTPClient(proxyURL),
 	}
 }
 

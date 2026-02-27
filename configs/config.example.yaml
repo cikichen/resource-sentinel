@@ -13,6 +13,7 @@ notify:
     enabled: false
     token: ""
     chat_id: ""
+    api_base: ""
   wechat:
     enabled: false
     webhook: ""
@@ -27,6 +28,9 @@ notify:
     token: ""
     template: "txt"
     topic: ""
+
+network:
+  proxy_url: ""
 
 web:
   enabled: true

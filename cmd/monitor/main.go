@@ -4,8 +4,11 @@ import (
 	"context"
 	"flag"
 	"log"
+	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -29,6 +32,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("load config failed: %v", err)
 	}
+	applyGlobalProxy(cfg.Network.ProxyURL)
 
 	collector := monitor.NewSystemCollector(cfg.Monitor.DiskPath, cfg.Monitor.CPUWindow)
 	evaluator := monitor.NewEvaluator(monitor.Thresholds{
@@ -40,19 +44,24 @@ func main() {
 
 	notifiers := make([]notify.Notifier, 0, 5)
 	if cfg.Notify.Telegram.Enabled {
-		notifiers = append(notifiers, notify.NewTelegramNotifier(cfg.Notify.Telegram.Token, cfg.Notify.Telegram.ChatID))
+		notifiers = append(notifiers, notify.NewTelegramNotifier(
+			cfg.Notify.Telegram.Token,
+			cfg.Notify.Telegram.ChatID,
+			cfg.Notify.Telegram.APIBase,
+			cfg.Network.ProxyURL,
+		))
 	}
 	if cfg.Notify.WeChat.Enabled {
-		notifiers = append(notifiers, notify.NewWeChatNotifier(cfg.Notify.WeChat.Webhook))
+		notifiers = append(notifiers, notify.NewWeChatNotifier(cfg.Notify.WeChat.Webhook, cfg.Network.ProxyURL))
 	}
 	if cfg.Notify.IYUU.Enabled {
-		notifiers = append(notifiers, notify.NewIYUUNotifier(cfg.Notify.IYUU.Token))
+		notifiers = append(notifiers, notify.NewIYUUNotifier(cfg.Notify.IYUU.Token, cfg.Network.ProxyURL))
 	}
 	if cfg.Notify.Webhook.Enabled {
-		notifiers = append(notifiers, notify.NewWebhookNotifier(cfg.Notify.Webhook.URL))
+		notifiers = append(notifiers, notify.NewWebhookNotifier(cfg.Notify.Webhook.URL, cfg.Network.ProxyURL))
 	}
 	if cfg.Notify.PushPlus.Enabled {
-		push := notify.NewPushPlusNotifier(cfg.Notify.PushPlus.Token).
+		push := notify.NewPushPlusNotifier(cfg.Notify.PushPlus.Token, cfg.Network.ProxyURL).
 			WithTemplate(cfg.Notify.PushPlus.Template).
 			WithTopic(cfg.Notify.PushPlus.Topic)
 		notifiers = append(notifiers, push)
@@ -104,4 +113,27 @@ func main() {
 		log.Fatalf("runner exited with error: %v", runErr)
 	}
 	log.Printf("resource sentinel stopped")
+}
+
+func applyGlobalProxy(proxyURL string) {
+	cleanProxy := strings.TrimSpace(proxyURL)
+	if cleanProxy == "" {
+		return
+	}
+	parsed, err := url.Parse(cleanProxy)
+	if err != nil {
+		log.Printf("warning: ignore invalid global proxy url %q: %v", cleanProxy, err)
+		return
+	}
+
+	transport, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		log.Printf("warning: unsupported default transport type %T, skip global proxy", http.DefaultTransport)
+		return
+	}
+
+	cloned := transport.Clone()
+	cloned.Proxy = http.ProxyURL(parsed)
+	http.DefaultTransport = cloned
+	log.Printf("global proxy enabled: %s", cleanProxy)
 }

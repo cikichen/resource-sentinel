@@ -11,6 +11,46 @@ import (
 	"testing"
 )
 
+func TestTelegramNotifierSendWithCustomAPIBase(t *testing.T) {
+	var gotPath string
+	var got map[string]string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read request body failed: %v", err)
+		}
+		_ = r.Body.Close()
+
+		if err := json.Unmarshal(body, &got); err != nil {
+			t.Fatalf("unmarshal payload failed: %v", err)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	n := NewTelegramNotifier("token-123", "10001", server.URL, "")
+	n.client = server.Client()
+
+	message := Message{Title: "资源告警", Body: "CPU 超阈值"}
+	if err := n.Send(context.Background(), message); err != nil {
+		t.Fatalf("send telegram message failed: %v", err)
+	}
+
+	if gotPath != "/bottoken-123/sendMessage" {
+		t.Fatalf("unexpected path: %s", gotPath)
+	}
+	if got["chat_id"] != "10001" {
+		t.Fatalf("unexpected chat_id: %s", got["chat_id"])
+	}
+	if !strings.Contains(got["text"], "资源告警") {
+		t.Fatalf("unexpected text: %s", got["text"])
+	}
+}
+
 func TestIYUUNotifierSend(t *testing.T) {
 	var gotPath string
 	var gotValues url.Values
@@ -34,7 +74,7 @@ func TestIYUUNotifierSend(t *testing.T) {
 	}))
 	defer server.Close()
 
-	n := NewIYUUNotifier("token-123")
+	n := NewIYUUNotifier("token-123", "")
 	n.baseURL = server.URL
 	n.client = server.Client()
 
@@ -77,7 +117,7 @@ func TestWebhookNotifierSend(t *testing.T) {
 	}))
 	defer server.Close()
 
-	n := NewWebhookNotifier(server.URL)
+	n := NewWebhookNotifier(server.URL, "")
 	n.client = server.Client()
 
 	message := Message{Title: "资源恢复", Body: "CPU 已恢复"}
@@ -116,7 +156,7 @@ func TestPushPlusNotifierSend(t *testing.T) {
 	}))
 	defer server.Close()
 
-	n := NewPushPlusNotifier("push-token")
+	n := NewPushPlusNotifier("push-token", "")
 	n.baseURL = server.URL
 	n.client = server.Client()
 	n.template = "markdown"
@@ -151,7 +191,7 @@ func TestPushPlusNotifierSend_BusinessError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	n := NewPushPlusNotifier("push-token")
+	n := NewPushPlusNotifier("push-token", "")
 	n.baseURL = server.URL
 	n.client = server.Client()
 

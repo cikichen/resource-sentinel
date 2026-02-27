@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 )
 
 type IYUUNotifier struct {
@@ -16,11 +15,11 @@ type IYUUNotifier struct {
 	client  *http.Client
 }
 
-func NewIYUUNotifier(token string) *IYUUNotifier {
+func NewIYUUNotifier(token, proxyURL string) *IYUUNotifier {
 	return &IYUUNotifier{
 		token:   strings.TrimSpace(token),
 		baseURL: "https://iyuu.cn",
-		client:  &http.Client{Timeout: 10 * time.Second},
+		client:  newHTTPClient(proxyURL),
 	}
 }
 

@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 )
 
 type WebhookNotifier struct {
@@ -16,10 +15,10 @@ type WebhookNotifier struct {
 	client *http.Client
 }
 
-func NewWebhookNotifier(webhookURL string) *WebhookNotifier {
+func NewWebhookNotifier(webhookURL, proxyURL string) *WebhookNotifier {
 	return &WebhookNotifier{
 		url:    strings.TrimSpace(webhookURL),
-		client: &http.Client{Timeout: 10 * time.Second},
+		client: newHTTPClient(proxyURL),
 	}
 }
 

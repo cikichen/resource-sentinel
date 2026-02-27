@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 )
 
 type PushPlusNotifier struct {
@@ -19,12 +18,12 @@ type PushPlusNotifier struct {
 	client   *http.Client
 }
 
-func NewPushPlusNotifier(token string) *PushPlusNotifier {
+func NewPushPlusNotifier(token, proxyURL string) *PushPlusNotifier {
 	return &PushPlusNotifier{
 		token:    strings.TrimSpace(token),
 		template: "txt",
 		baseURL:  "https://www.pushplus.plus/send",
-		client:   &http.Client{Timeout: 10 * time.Second},
+		client:   newHTTPClient(proxyURL),
 	}
 }
 

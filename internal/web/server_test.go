@@ -180,6 +180,9 @@ func TestSaveVisualConfig(t *testing.T) {
 				"disk":   88.0,
 			},
 		},
+		"network": map[string]any{
+			"proxy_url": "http://127.0.0.1:7890",
+		},
 		"notify": map[string]any{
 			"telegram": map[string]any{"enabled": false, "token": "", "chat_id": ""},
 			"wechat":   map[string]any{"enabled": false, "webhook": ""},
@@ -216,6 +219,9 @@ func TestSaveVisualConfig(t *testing.T) {
 	}
 	if !strings.Contains(content, "interval: 10s") {
 		t.Fatalf("interval not updated: %s", content)
+	}
+	if !strings.Contains(content, "proxy_url: http://127.0.0.1:7890") {
+		t.Fatalf("network proxy_url not updated: %s", content)
 	}
 	if !strings.Contains(content, "auth_token: $2") {
 		t.Fatalf("web auth token should be bcrypt hash: %s", content)

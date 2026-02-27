@@ -49,9 +49,11 @@ docker run -d \
   --restart unless-stopped \
   -p 127.0.0.1:8080:8080 \
   -e CONFIG_PATH=/app/configs/config.yaml \
+  -e APP_PROXY_URL= \
   -e APP_TG_ENABLED=true \
   -e APP_TG_TOKEN=你的TG机器人Token \
   -e APP_TG_CHAT_ID=你的ChatID \
+  -e APP_TG_API_BASE=https://api.telegram.org \
   -e APP_WEB_ENABLED=true \
   -e APP_WEB_LISTEN=:8080 \
   -e APP_WEB_AUTH_TOKEN=替换成强口令 \
@@ -86,9 +88,11 @@ services:
       APP_WEB_LISTEN: ":8080"
       APP_WEB_RATE_LIMIT_PER_MINUTE: "120"
       APP_WEB_ALLOWED_CIDRS: ""
+      APP_PROXY_URL: ""
       APP_TG_ENABLED: "false"
       APP_TG_TOKEN: ""
       APP_TG_CHAT_ID: ""
+      APP_TG_API_BASE: ""
       APP_WECHAT_ENABLED: "false"
       APP_WECHAT_WEBHOOK: ""
       APP_IYUU_ENABLED: "false"
@@ -125,6 +129,7 @@ notify:
     enabled: false
     token: ""
     chat_id: ""
+    api_base: ""    # 留空默认 https://api.telegram.org
   wechat:
     enabled: false
     webhook: ""
@@ -139,6 +144,9 @@ notify:
     token: ""
     template: "txt"
     topic: ""
+
+network:
+  proxy_url: ""  # 全局代理（可选），程序所有出网请求统一使用
 
 web:
   enabled: true
@@ -157,9 +165,11 @@ web:
 - `APP_THRESHOLD_CPU` 例如 `85`
 - `APP_THRESHOLD_MEMORY` 例如 `80`
 - `APP_THRESHOLD_DISK` 例如 `90`
+- `APP_PROXY_URL` 全局代理地址（可选，支持 `http`/`https`/`socks5`/`socks5h`）
 - `APP_TG_ENABLED` 例如 `true`
 - `APP_TG_TOKEN`
 - `APP_TG_CHAT_ID`
+- `APP_TG_API_BASE` 自定义 Telegram Bot API 地址（可选，默认官方 `https://api.telegram.org`）
 - `APP_WECHAT_ENABLED` 例如 `true`
 - `APP_WECHAT_WEBHOOK` 企业微信机器人 webhook 地址
 - `APP_IYUU_ENABLED` 例如 `true`
@@ -200,6 +210,8 @@ web:
 
 1. 用 `@BotFather` 创建机器人，拿到 token。
 2. 将机器人拉进目标群或私聊，拿到 `chat_id`。
+3. 如需走自建 Bot API，可配置 `notify.telegram.api_base` 或 `APP_TG_API_BASE`。
+4. 如需程序所有出网请求走代理，可配置 `network.proxy_url` 或 `APP_PROXY_URL`。
 
 ## 企业微信机器人准备
 

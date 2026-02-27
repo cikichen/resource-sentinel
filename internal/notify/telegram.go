@@ -8,20 +8,25 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 )
 
 type TelegramNotifier struct {
-	token  string
-	chatID string
-	client *http.Client
+	token   string
+	chatID  string
+	apiBase string
+	client  *http.Client
 }
 
-func NewTelegramNotifier(token, chatID string) *TelegramNotifier {
+func NewTelegramNotifier(token, chatID, apiBase, proxyURL string) *TelegramNotifier {
+	cleanBase := strings.TrimSpace(apiBase)
+	if cleanBase == "" {
+		cleanBase = "https://api.telegram.org"
+	}
 	return &TelegramNotifier{
-		token:  strings.TrimSpace(token),
-		chatID: strings.TrimSpace(chatID),
-		client: &http.Client{Timeout: 10 * time.Second},
+		token:   strings.TrimSpace(token),
+		chatID:  strings.TrimSpace(chatID),
+		apiBase: strings.TrimRight(cleanBase, "/"),
+		client:  newHTTPClient(proxyURL),
 	}
 }
 
@@ -39,12 +44,13 @@ func (n *TelegramNotifier) Send(ctx context.Context, message Message) error {
 		"text":       fmt.Sprintf("%s\n%s", message.Title, message.Body),
 		"parse_mode": "HTML",
 	}
+
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("marshal telegram payload: %w", err)
 	}
 
-	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", n.token)
+	url := fmt.Sprintf("%s/bot%s/sendMessage", n.apiBase, n.token)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
 	if err != nil {
 		return fmt.Errorf("create telegram request: %w", err)

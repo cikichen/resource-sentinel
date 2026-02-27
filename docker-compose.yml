@@ -9,8 +9,10 @@ services:
       TZ: Asia/Shanghai
       CONFIG_PATH: /app/configs/config.yaml
       APP_TG_ENABLED: "true"
+      APP_PROXY_URL: ""
       APP_TG_TOKEN: ""
       APP_TG_CHAT_ID: ""
+      APP_TG_API_BASE: ""
       APP_WECHAT_ENABLED: "false"
       APP_WECHAT_WEBHOOK: ""
       APP_IYUU_ENABLED: "false"

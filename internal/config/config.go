@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"net"
+	neturl "net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -13,6 +14,7 @@ import (
 
 type Config struct {
 	Monitor MonitorConfig `yaml:"monitor"`
+	Network NetworkConfig `yaml:"network"`
 	Notify  NotifyConfig  `yaml:"notify"`
 	Web     WebConfig     `yaml:"web"`
 }
@@ -31,6 +33,10 @@ type ThresholdsConf struct {
 	Disk   float64 `yaml:"disk"`
 }
 
+type NetworkConfig struct {
+	ProxyURL string `yaml:"proxy_url"`
+}
+
 type NotifyConfig struct {
 	Telegram TelegramConfig `yaml:"telegram"`
 	WeChat   WeChatConfig   `yaml:"wechat"`
@@ -43,6 +49,7 @@ type TelegramConfig struct {
 	Enabled bool   `yaml:"enabled"`
 	Token   string `yaml:"token"`
 	ChatID  string `yaml:"chat_id"`
+	APIBase string `yaml:"api_base"`
 }
 
 type WeChatConfig struct {
@@ -215,11 +222,14 @@ func applyEnvOverrides(cfg *Config) error {
 		return err
 	}
 
+	setString("APP_PROXY_URL", &cfg.Network.ProxyURL)
+
 	if err := setBool("APP_TG_ENABLED", &cfg.Notify.Telegram.Enabled); err != nil {
 		return err
 	}
 	setString("APP_TG_TOKEN", &cfg.Notify.Telegram.Token)
 	setString("APP_TG_CHAT_ID", &cfg.Notify.Telegram.ChatID)
+	setString("APP_TG_API_BASE", &cfg.Notify.Telegram.APIBase)
 
 	if err := setBool("APP_WECHAT_ENABLED", &cfg.Notify.WeChat.Enabled); err != nil {
 		return err
@@ -301,6 +311,17 @@ func Validate(cfg Config) error {
 	if cfg.Web.Enabled && strings.TrimSpace(cfg.Web.Listen) == "" {
 		return fmt.Errorf("web.listen must be configured when web.enabled=true")
 	}
+
+	if strings.TrimSpace(cfg.Notify.Telegram.APIBase) != "" {
+		if err := validateHTTPBaseURL(cfg.Notify.Telegram.APIBase); err != nil {
+			return fmt.Errorf("notify.telegram.api_base is invalid: %w", err)
+		}
+	}
+	if strings.TrimSpace(cfg.Network.ProxyURL) != "" {
+		if err := validateProxyURL(cfg.Network.ProxyURL); err != nil {
+			return fmt.Errorf("network.proxy_url is invalid: %w", err)
+		}
+	}
 	if cfg.Web.Enabled {
 		if cfg.Web.RateLimitPerMinute <= 0 {
 			return fmt.Errorf("web.rate_limit_per_minute must be > 0")
@@ -354,6 +375,36 @@ func validateCIDROrIP(value string) error {
 	}
 	if ip := net.ParseIP(value); ip == nil {
 		return fmt.Errorf("invalid ip")
+	}
+	return nil
+}
+
+func validateHTTPBaseURL(value string) error {
+	parsed, err := neturl.Parse(strings.TrimSpace(value))
+	if err != nil {
+		return err
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("scheme must be http or https")
+	}
+	if strings.TrimSpace(parsed.Host) == "" {
+		return fmt.Errorf("host is required")
+	}
+	return nil
+}
+
+func validateProxyURL(value string) error {
+	parsed, err := neturl.Parse(strings.TrimSpace(value))
+	if err != nil {
+		return err
+	}
+	switch parsed.Scheme {
+	case "http", "https", "socks5", "socks5h":
+	default:
+		return fmt.Errorf("scheme must be http, https, socks5 or socks5h")
+	}
+	if strings.TrimSpace(parsed.Host) == "" {
+		return fmt.Errorf("host is required")
 	}
 	return nil
 }

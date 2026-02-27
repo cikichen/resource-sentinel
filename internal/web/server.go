@@ -87,6 +87,7 @@ const sessionCookieName = "config_session"
 
 type visualConfig struct {
 	Monitor visualMonitorConfig `json:"monitor"`
+	Network visualNetworkConfig `json:"network"`
 	Notify  visualNotifyConfig  `json:"notify"`
 	Web     visualWebConfig     `json:"web"`
 }
@@ -105,6 +106,10 @@ type visualThresholdsConfig struct {
 	Disk   float64 `json:"disk"`
 }
 
+type visualNetworkConfig struct {
+	ProxyURL string `json:"proxy_url"`
+}
+
 type visualNotifyConfig struct {
 	Telegram visualTelegramConfig `json:"telegram"`
 	WeChat   visualWeChatConfig   `json:"wechat"`
@@ -117,6 +122,7 @@ type visualTelegramConfig struct {
 	Enabled bool   `json:"enabled"`
 	Token   string `json:"token"`
 	ChatID  string `json:"chat_id"`
+	APIBase string `json:"api_base"`
 }
 
 type visualWeChatConfig struct {
@@ -152,6 +158,7 @@ type visualWebConfig struct {
 
 type yamlConfig struct {
 	Monitor yamlMonitorConfig `yaml:"monitor"`
+	Network yamlNetworkConfig `yaml:"network"`
 	Notify  yamlNotifyConfig  `yaml:"notify"`
 	Web     yamlWebConfig     `yaml:"web"`
 }
@@ -170,6 +177,10 @@ type yamlThresholdsConfig struct {
 	Disk   float64 `yaml:"disk"`
 }
 
+type yamlNetworkConfig struct {
+	ProxyURL string `yaml:"proxy_url"`
+}
+
 type yamlNotifyConfig struct {
 	Telegram yamlTelegramConfig `yaml:"telegram"`
 	WeChat   yamlWeChatConfig   `yaml:"wechat"`
@@ -182,6 +193,7 @@ type yamlTelegramConfig struct {
 	Enabled bool   `yaml:"enabled"`
 	Token   string `yaml:"token"`
 	ChatID  string `yaml:"chat_id"`
+	APIBase string `yaml:"api_base"`
 }
 
 type yamlWeChatConfig struct {
@@ -647,11 +659,15 @@ func toVisualConfig(cfg config.Config) visualConfig {
 				Disk:   cfg.Monitor.Thresholds.Disk,
 			},
 		},
+		Network: visualNetworkConfig{
+			ProxyURL: cfg.Network.ProxyURL,
+		},
 		Notify: visualNotifyConfig{
 			Telegram: visualTelegramConfig{
 				Enabled: cfg.Notify.Telegram.Enabled,
 				Token:   cfg.Notify.Telegram.Token,
 				ChatID:  cfg.Notify.Telegram.ChatID,
+				APIBase: cfg.Notify.Telegram.APIBase,
 			},
 			WeChat: visualWeChatConfig{
 				Enabled: cfg.Notify.WeChat.Enabled,
@@ -712,11 +728,15 @@ func (v visualConfig) toConfig() (config.Config, error) {
 				Disk:   v.Monitor.Thresholds.Disk,
 			},
 		},
+		Network: config.NetworkConfig{
+			ProxyURL: strings.TrimSpace(v.Network.ProxyURL),
+		},
 		Notify: config.NotifyConfig{
 			Telegram: config.TelegramConfig{
 				Enabled: v.Notify.Telegram.Enabled,
 				Token:   strings.TrimSpace(v.Notify.Telegram.Token),
 				ChatID:  strings.TrimSpace(v.Notify.Telegram.ChatID),
+				APIBase: strings.TrimSpace(v.Notify.Telegram.APIBase),
 			},
 			WeChat: config.WeChatConfig{
 				Enabled: v.Notify.WeChat.Enabled,
@@ -774,8 +794,16 @@ func marshalVisualYAML(v visualConfig) ([]byte, error) {
 				Disk:   v.Monitor.Thresholds.Disk,
 			},
 		},
+		Network: yamlNetworkConfig{
+			ProxyURL: v.Network.ProxyURL,
+		},
 		Notify: yamlNotifyConfig{
-			Telegram: yamlTelegramConfig{Enabled: v.Notify.Telegram.Enabled, Token: v.Notify.Telegram.Token, ChatID: v.Notify.Telegram.ChatID},
+			Telegram: yamlTelegramConfig{
+				Enabled: v.Notify.Telegram.Enabled,
+				Token:   v.Notify.Telegram.Token,
+				ChatID:  v.Notify.Telegram.ChatID,
+				APIBase: v.Notify.Telegram.APIBase,
+			},
 			WeChat:   yamlWeChatConfig{Enabled: v.Notify.WeChat.Enabled, Webhook: v.Notify.WeChat.Webhook},
 			IYUU:     yamlIYUUConfig{Enabled: v.Notify.IYUU.Enabled, Token: v.Notify.IYUU.Token},
 			Webhook:  yamlWebhookConfig{Enabled: v.Notify.Webhook.Enabled, URL: v.Notify.Webhook.URL},
@@ -2193,6 +2221,20 @@ const indexHTML = `<!doctype html>
                 <p>按通道分组配置告警发送能力，可按你的使用场景单独启用。</p>
               </div>
               <div class="group-grid">
+                <article class="card span-12" id="network-global">
+                  <div class="card-header">
+                    <h3>全局网络代理</h3>
+                    <p class="card-sub">程序所有出网请求统一走代理（可选）</p>
+                  </div>
+                  <div class="fields">
+                    <div class="field full">
+                      <label for="network_proxy_url">代理地址（可选）</label>
+                      <input id="network_proxy_url" placeholder="http://127.0.0.1:7890 或 socks5://127.0.0.1:1080">
+                      <small>支持 http / https / socks5 / socks5h，留空表示直连。</small>
+                    </div>
+                  </div>
+                </article>
+
                 <article class="card span-4" id="notify-main">
                   <div class="card-header">
                     <h3>Telegram</h3>
@@ -2202,6 +2244,7 @@ const indexHTML = `<!doctype html>
                   <div class="fields">
                     <div class="field full"><label for="tg_token">Bot Token</label><input id="tg_token"></div>
                     <div class="field full"><label for="tg_chat_id">Chat ID</label><input id="tg_chat_id"></div>
+                    <div class="field full"><label for="tg_api_base">自定义 API 地址（可选）</label><input id="tg_api_base" placeholder="https://api.telegram.org"></div>
                   </div>
                 </article>
 
@@ -2587,8 +2630,10 @@ const indexHTML = `<!doctype html>
       el('threshold_memory').value = cfg.monitor.thresholds.memory;
       el('threshold_disk').value = cfg.monitor.thresholds.disk;
       el('tg_enabled').checked = !!cfg.notify.telegram.enabled;
+      el('network_proxy_url').value = (cfg.network && cfg.network.proxy_url) || '';
       el('tg_token').value = cfg.notify.telegram.token || '';
       el('tg_chat_id').value = cfg.notify.telegram.chat_id || '';
+      el('tg_api_base').value = cfg.notify.telegram.api_base || '';
       el('wechat_enabled').checked = !!cfg.notify.wechat.enabled;
       el('wechat_webhook').value = cfg.notify.wechat.webhook || '';
       el('iyuu_enabled').checked = !!cfg.notify.iyuu.enabled;
@@ -2620,8 +2665,16 @@ const indexHTML = `<!doctype html>
             disk: Number(el('threshold_disk').value)
           }
         },
+        network: {
+          proxy_url: el('network_proxy_url').value.trim()
+        },
         notify: {
-          telegram: { enabled: el('tg_enabled').checked, token: el('tg_token').value.trim(), chat_id: el('tg_chat_id').value.trim() },
+          telegram: {
+            enabled: el('tg_enabled').checked,
+            token: el('tg_token').value.trim(),
+            chat_id: el('tg_chat_id').value.trim(),
+            api_base: el('tg_api_base').value.trim()
+          },
           wechat: { enabled: el('wechat_enabled').checked, webhook: el('wechat_webhook').value.trim() },
           iyuu: { enabled: el('iyuu_enabled').checked, token: el('iyuu_token').value.trim() },
           webhook: { enabled: el('webhook_enabled').checked, url: el('webhook_url').value.trim() },
