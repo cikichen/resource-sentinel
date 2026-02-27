@@ -1141,22 +1141,23 @@ const indexHTML = `<!doctype html>
     :root {
       --color-primary: #0f172a;
       --color-secondary: #334155;
-      --color-cta: #0ea5e9;
-      --color-bg: #eef6ff;
+      --color-cta: #2563eb;
+      --color-bg: #f4f8fc;
       --color-panel: #ffffff;
-      --color-soft: #f3f8ff;
-      --color-text: #020617;
-      --color-muted: #475569;
-      --color-line: #d6e3f3;
+      --color-soft: #f8fafc;
+      --color-text: #0f172a;
+      --color-muted: #64748b;
+      --color-line: #e2e8f0;
       --color-success: #15803d;
       --color-warning: #b45309;
       --color-danger: #b91c1c;
-      --shadow-sm: 0 12px 24px rgba(15, 23, 42, 0.08);
-      --shadow-md: 0 24px 60px rgba(15, 23, 42, 0.13);
-      --radius-lg: 20px;
-      --radius-md: 14px;
+      --shadow-sm: 0 6px 18px rgba(15, 23, 42, 0.06);
+      --shadow-md: 0 18px 42px rgba(15, 23, 42, 0.08);
+      --radius-lg: 16px;
+      --radius-md: 12px;
       --radius-sm: 10px;
       --anchor-offset: 120px;
+      --gradient-cta: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
     }
 
     * { box-sizing: border-box; }
@@ -1167,11 +1168,11 @@ const indexHTML = `<!doctype html>
       margin: 0;
       min-height: 100vh;
       color: var(--color-text);
-      font-family: "Fira Sans", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-family: "SF Pro Display", "Avenir Next", "Segoe UI", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
       background:
-        radial-gradient(1000px 500px at -15% 5%, rgba(14, 165, 233, 0.22), transparent 58%),
-        radial-gradient(1200px 640px at 120% -10%, rgba(15, 23, 42, 0.14), transparent 60%),
-        linear-gradient(180deg, #f8fbff 0%, #ecf5ff 100%);
+        radial-gradient(820px 420px at -10% 0%, rgba(37, 99, 235, 0.08), transparent 58%),
+        radial-gradient(920px 520px at 110% -8%, rgba(14, 165, 233, 0.08), transparent 62%),
+        linear-gradient(180deg, #f8fbff 0%, #f3f7fc 100%);
       line-height: 1.5;
     }
 
@@ -1200,7 +1201,7 @@ const indexHTML = `<!doctype html>
       margin: 0 0 8px;
       font-size: 18px;
       color: var(--color-primary);
-      font-family: "Fira Code", "JetBrains Mono", monospace;
+      font-family: inherit;
     }
 
     .boot-card p {
@@ -1255,15 +1256,15 @@ const indexHTML = `<!doctype html>
       padding: 28px 30px;
       color: #e2e8f0;
       background:
-        radial-gradient(600px 220px at 80% 0%, rgba(14, 165, 233, 0.42), transparent 58%),
-        linear-gradient(145deg, #0f172a, #1e293b 58%, #0b4a6f 100%);
+        radial-gradient(620px 260px at 85% 0%, rgba(125, 211, 252, 0.28), transparent 58%),
+        linear-gradient(145deg, #1e3a8a, #1d4ed8 62%, #0ea5e9 100%);
       display: grid;
       gap: 18px;
     }
 
     .auth-showcase h2 {
       margin: 0;
-      font-family: "Fira Code", "JetBrains Mono", monospace;
+      font-family: inherit;
       font-size: 32px;
       line-height: 1.15;
       letter-spacing: .2px;
@@ -1323,7 +1324,7 @@ const indexHTML = `<!doctype html>
 
     .auth-title {
       margin: 0;
-      font-family: "Fira Code", "JetBrains Mono", monospace;
+      font-family: inherit;
       color: var(--color-primary);
       font-size: 24px;
       line-height: 1.25;
@@ -1388,7 +1389,7 @@ const indexHTML = `<!doctype html>
       position: sticky;
       top: 8px;
       z-index: 60;
-      background: rgba(255, 255, 255, 0.9);
+      background: rgba(255, 255, 255, 0.92);
       border: 1px solid var(--color-line);
       border-radius: var(--radius-lg);
       box-shadow: var(--shadow-sm);
@@ -1396,6 +1397,7 @@ const indexHTML = `<!doctype html>
       display: grid;
       gap: 12px;
       backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
     }
 
     .topbar-row {
@@ -1415,7 +1417,7 @@ const indexHTML = `<!doctype html>
       display: inline-flex;
       align-items: center;
       gap: 10px;
-      font-family: "Fira Code", "JetBrains Mono", monospace;
+      font-family: inherit;
       font-size: 15px;
       font-weight: 700;
       letter-spacing: .2px;
@@ -1482,7 +1484,7 @@ const indexHTML = `<!doctype html>
       min-height: 42px;
       border: 1px solid transparent;
       border-radius: var(--radius-sm);
-      padding: 9px 14px;
+      padding: 9px 15px;
       font-size: 14px;
       font-weight: 700;
       cursor: pointer;
@@ -1497,15 +1499,14 @@ const indexHTML = `<!doctype html>
     }
 
     .btn-primary {
-      background: var(--color-cta);
-      border-color: var(--color-cta);
+      background: var(--gradient-cta);
+      border-color: #1d4ed8;
       color: #fff;
     }
 
     .btn-primary:hover {
-      background: #0284c7;
-      border-color: #0284c7;
-      box-shadow: 0 6px 18px rgba(14, 165, 233, 0.28);
+      border-color: #1e40af;
+      box-shadow: 0 10px 22px rgba(37, 99, 235, 0.3);
     }
 
     .btn-secondary {
@@ -1568,7 +1569,7 @@ const indexHTML = `<!doctype html>
 
     .workspace {
       display: grid;
-      gap: 14px;
+      gap: 16px;
       grid-template-columns: 260px minmax(0, 1fr);
       align-items: start;
     }
@@ -1577,7 +1578,7 @@ const indexHTML = `<!doctype html>
       position: sticky;
       top: 12px;
       border-radius: var(--radius-lg);
-      background: rgba(255, 255, 255, 0.84);
+      background: rgba(255, 255, 255, 0.9);
       border: 1px solid var(--color-line);
       box-shadow: var(--shadow-sm);
       padding: 14px;
@@ -1606,13 +1607,23 @@ const indexHTML = `<!doctype html>
       padding: 10px 11px;
       font-size: 13px;
       font-weight: 700;
-      transition: background-color .18s ease, border-color .18s ease;
+      border-left: 3px solid transparent;
+      transition: background-color .18s ease, border-color .18s ease, border-left-color .18s ease;
       cursor: pointer;
     }
 
     .toc a:hover {
-      background: #e2ecfb;
-      border-color: #93b5d7;
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+      border-left-color: var(--color-cta);
+    }
+
+    .toc a.active {
+      background: #edf4ff;
+      border-color: #bfdbfe;
+      border-left-color: #2563eb;
+      color: #1d4ed8;
+      box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.08);
     }
 
     .hint-list {
@@ -1638,28 +1649,28 @@ const indexHTML = `<!doctype html>
 
     .hero {
       border-radius: var(--radius-lg);
-      border: 1px solid #aac9e9;
+      border: 1px solid #d5e3f4;
       box-shadow: var(--shadow-md);
       padding: 20px;
       background:
-        radial-gradient(780px 240px at 84% -5%, rgba(14, 165, 233, 0.35), transparent 60%),
-        linear-gradient(140deg, #0f172a 0%, #1e293b 60%, #0b4a6f 100%);
-      color: #e2e8f0;
+        radial-gradient(720px 260px at 96% -14%, rgba(37, 99, 235, 0.08), transparent 64%),
+        linear-gradient(135deg, #f8fbff 0%, #eef5ff 58%, #eaf3ff 100%);
+      color: var(--color-text);
     }
 
     .hero h1 {
       margin: 0;
-      font-family: "Fira Code", "JetBrains Mono", monospace;
+      font-family: inherit;
       font-size: 28px;
       line-height: 1.2;
       letter-spacing: .1px;
-      text-shadow: 0 0 10px rgba(14, 165, 233, 0.2);
+      text-shadow: none;
     }
 
     .hero p {
       margin: 8px 0 0;
       max-width: 72ch;
-      color: #cbd5e1;
+      color: var(--color-muted);
       font-size: 14px;
     }
 
@@ -1673,13 +1684,13 @@ const indexHTML = `<!doctype html>
     .hero-pill {
       display: inline-flex;
       align-items: center;
-      border: 1px solid rgba(148, 163, 184, 0.4);
+      border: 1px solid #c8dcff;
       border-radius: 999px;
       padding: 7px 11px;
       font-size: 12px;
       font-weight: 600;
-      background: rgba(15, 23, 42, 0.4);
-      color: #dbeafe;
+      background: #f0f6ff;
+      color: #1d4ed8;
     }
 
     .mode-card,
@@ -1690,10 +1701,13 @@ const indexHTML = `<!doctype html>
       border: 1px solid var(--color-line);
       border-radius: var(--radius-lg);
       box-shadow: var(--shadow-sm);
+      position: relative;
+      overflow: hidden;
+      isolation: isolate;
     }
 
     .mode-card {
-      padding: 15px;
+      padding: 18px;
       display: grid;
       gap: 10px;
     }
@@ -1741,7 +1755,7 @@ const indexHTML = `<!doctype html>
     .tab-btn.active {
       background: #fff;
       color: var(--color-primary);
-      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+      box-shadow: 0 3px 10px rgba(15, 23, 42, 0.06);
     }
 
     .tab-body { display: none; }
@@ -1769,7 +1783,7 @@ const indexHTML = `<!doctype html>
       margin: 0;
       font-size: 15px;
       color: var(--color-primary);
-      font-family: "Fira Code", "JetBrains Mono", monospace;
+      font-family: inherit;
     }
 
     .group-head p {
@@ -1781,12 +1795,42 @@ const indexHTML = `<!doctype html>
     .group-grid {
       display: grid;
       grid-template-columns: repeat(12, minmax(0, 1fr));
-      gap: 12px;
+      gap: 14px;
     }
 
     .overview-card {
-      padding: 15px;
+      padding: 18px;
       border-left: 4px solid var(--color-cta);
+      background: linear-gradient(180deg, #ffffff 0%, #f9fcff 100%);
+    }
+
+    .overview-card::before,
+    .mode-card::before,
+    .raw-card::before,
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+    }
+
+    .mode-card::after,
+    .raw-card::after,
+    .card::after {
+      content: "";
+      position: absolute;
+      top: -130%;
+      left: -42%;
+      width: 78%;
+      height: 280%;
+      pointer-events: none;
+      background: linear-gradient(120deg, rgba(37, 99, 235, 0.1), rgba(37, 99, 235, 0.02) 35%, rgba(255, 255, 255, 0) 70%);
+      transform: rotate(14deg);
+      opacity: 0.4;
+      transition: transform .35s ease, opacity .35s ease;
     }
 
     .overview-grid {
@@ -1797,13 +1841,14 @@ const indexHTML = `<!doctype html>
     }
 
     .overview-item {
-      border: 1px solid #dce8f5;
+      border: 1px solid #d4e2f1;
       border-radius: 10px;
-      background: #f7fbff;
-      padding: 10px 11px;
+      background: linear-gradient(180deg, #fbfdff 0%, #f4f8ff 100%);
+      padding: 11px 12px;
       display: grid;
       gap: 6px;
       min-height: 78px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
     }
 
     .overview-label {
@@ -1844,7 +1889,22 @@ const indexHTML = `<!doctype html>
     }
 
     .card {
-      padding: 15px;
+      padding: 18px;
+      background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+      transition: box-shadow .2s ease, border-color .2s ease, transform .2s ease;
+    }
+
+    .card:hover {
+      border-color: #bfd0e6;
+      box-shadow: 0 14px 30px rgba(15, 23, 42, 0.11);
+      transform: translateY(-2px);
+    }
+
+    .mode-card:hover::after,
+    .raw-card:hover::after,
+    .card:hover::after {
+      transform: translateX(18%) rotate(14deg);
+      opacity: 0.75;
     }
 
     .span-12 { grid-column: span 12; }
@@ -1855,17 +1915,19 @@ const indexHTML = `<!doctype html>
       margin: 0;
       font-size: 17px;
       color: var(--color-primary);
-      font-family: "Fira Code", "JetBrains Mono", monospace;
+      font-family: inherit;
       letter-spacing: .1px;
     }
 
     .card-header {
-      margin-bottom: 10px;
+      margin-bottom: 12px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       gap: 8px;
       flex-wrap: wrap;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #eef2f7;
     }
 
     .card-sub {
@@ -1877,8 +1939,8 @@ const indexHTML = `<!doctype html>
     .fields {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
-      margin-top: 10px;
+      gap: 12px;
+      margin-top: 12px;
     }
 
     .field {
@@ -1906,8 +1968,8 @@ const indexHTML = `<!doctype html>
       width: 100%;
       min-height: 44px;
       border-radius: var(--radius-sm);
-      border: 1px solid #c6d4e7;
-      background: #fff;
+      border: 1px solid #d6dee9;
+      background: #fcfdff;
       color: var(--color-text);
       padding: 10px 11px;
       font-size: 14px;
@@ -1918,15 +1980,16 @@ const indexHTML = `<!doctype html>
     .field input:hover,
     .field select:hover,
     textarea:hover {
-      border-color: #88a9cb;
+      border-color: #b8c8dc;
     }
 
     .field input:focus,
     .field select:focus,
     textarea:focus {
-      border-color: #0ea5e9;
-      box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.16);
+      border-color: #60a5fa;
+      box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
       outline: none;
+      background: #ffffff;
     }
 
     .toggle {
@@ -1957,7 +2020,7 @@ const indexHTML = `<!doctype html>
     }
 
     .raw-card {
-      padding: 15px;
+      padding: 18px;
       display: grid;
       gap: 10px;
     }
@@ -2612,6 +2675,13 @@ const indexHTML = `<!doctype html>
       window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
     }
 
+    function setActiveToc(hash) {
+      tocLinks.forEach(function(link) {
+        const href = (link.getAttribute('href') || '').trim();
+        link.classList.toggle('active', href === hash);
+      });
+    }
+
     function switchTab(toRaw) {
       tabVisual.classList.toggle('active', !toRaw);
       tabRaw.classList.toggle('active', toRaw);
@@ -2917,8 +2987,14 @@ const indexHTML = `<!doctype html>
       e.returnValue = '';
     });
 
-    if (openAdvancedBtn) openAdvancedBtn.addEventListener('click', function(){ switchTab(true); });
-    if (backVisualBtn) backVisualBtn.addEventListener('click', function(){ switchTab(false); });
+    if (openAdvancedBtn) openAdvancedBtn.addEventListener('click', function(){
+      switchTab(true);
+      setActiveToc('#advanced');
+    });
+    if (backVisualBtn) backVisualBtn.addEventListener('click', function(){
+      switchTab(false);
+      setActiveToc('#overview');
+    });
     window.addEventListener('resize', syncAnchorOffset);
     tocLinks.forEach(function(link) {
       link.addEventListener('click', function(e) {
@@ -2927,6 +3003,7 @@ const indexHTML = `<!doctype html>
         e.preventDefault();
         const toRaw = href === '#advanced';
         switchTab(toRaw);
+        setActiveToc(href);
         requestAnimationFrame(function() {
           scrollToHash(href);
         });
@@ -2954,7 +3031,10 @@ const indexHTML = `<!doctype html>
       setupToken();
       bindDirtyWatchers();
       syncAnchorOffset();
-      switchTab(false);
+      const initialHash = (window.location.hash || '#overview').trim();
+      const targetHash = document.querySelector(initialHash) ? initialHash : '#overview';
+      switchTab(targetHash === '#advanced');
+      setActiveToc(targetHash);
 
       const authStatus = await fetchAuthStatus();
       if (authStatus.ok) {
